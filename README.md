@@ -222,6 +222,7 @@ esp                 esptool wrapper + the two pyserial/esptool patches
 esp-monitor         serial console (screen/minicom replacement)
 cp210x_usb.py       the userspace CP2102 driver (CP210xSerial)
 selftest.py         live hardware self-test
+LICENSE             MIT
 AGENTS.md           briefing for AI assistants working on this repo
 docs/PROTOCOL.md    CP210x USB request reference + ESP32 reset sequences
 ```
@@ -232,6 +233,5 @@ non-obvious constraints (kernel state, single-interface ownership, the
 
 ## License
 
-No license file has been added yet — all rights reserved by default. Add one
-(MIT/Apache-2.0 are typical for this kind of tool) before you expect others to
-reuse it.
+[MIT](LICENSE) — free to use, modify and redistribute, with the usual
+"AS IS" warranty disclaimer. Copyright (c) 2026 Unnho.

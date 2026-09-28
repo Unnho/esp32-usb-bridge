@@ -35,7 +35,7 @@ STUB_FILES=(
   stub_flasher_32s2.json
   stub_flasher_32s3.json
 )
-SOURCE_FILES=(cp210x_usb.py esp esp-monitor selftest.py README.md AGENTS.md docs/PROTOCOL.md uninstall.sh)
+SOURCE_FILES=(cp210x_usb.py esp esp-monitor selftest.py LICENSE README.md AGENTS.md docs/PROTOCOL.md uninstall.sh)
 
 DRY_RUN=0
 DO_VERIFY=1
@@ -210,7 +210,7 @@ deploy_files() {
   run install -m 644 "$SRC_DIR/cp210x_usb.py" "$DEST_DRIVER_DIR/cp210x_usb.py"
   run install -m 755 "$SRC_DIR/selftest.py"   "$DEST_DRIVER_DIR/selftest.py"
   local doc
-  for doc in README.md AGENTS.md uninstall.sh; do
+  for doc in README.md AGENTS.md LICENSE uninstall.sh; do
     [[ -f "$SRC_DIR/$doc" ]] && run install -m 644 "$SRC_DIR/$doc" "$DEST_DRIVER_DIR/$doc"
   done
   run install -d -m 755 "$DEST_DRIVER_DIR/docs"

@@ -68,6 +68,7 @@ object.
 | `selftest.py` | Live hardware test: identity → line control → reset into download mode → ROM sync | verifying a change end-to-end |
 | `README.md` | Human-facing docs | user-visible behaviour changes |
 | `AGENTS.md` | This file | anything an agent should know |
+| `LICENSE` | MIT license (copyright `Unnho`) | relicensing decisions |
 | `docs/PROTOCOL.md` | CP210x USB request reference + ESP32 reset sequences | protocol questions |
 
 Runtime layout after install:
@@ -75,7 +76,7 @@ Runtime layout after install:
 ```
 /opt/esp-bridge/cp210x_usb.py     driver (imported by the wrappers)
 /opt/esp-bridge/selftest.py
-/opt/esp-bridge/README.md, AGENTS.md, docs/
+/opt/esp-bridge/README.md, AGENTS.md, LICENSE, docs/
 /usr/local/bin/esp                the command
 /usr/local/bin/esptool.py -> esp  conventional spelling
 /usr/local/bin/esp-monitor
