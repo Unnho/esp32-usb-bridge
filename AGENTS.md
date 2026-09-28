@@ -233,6 +233,8 @@ Note `selftest.py` **resets the board**; `esp-monitor --reset` does too.
 | `Failed to get PID of a device on /dev/esp32` | `_get_pid` cannot see a virtual port | patched to return `None` |
 | `esptool` (plain) can't connect | it looks for a real tty | always use `esp` / `esptool.py` |
 | `Permission denied` on `/dev/bus/usb/...` | usbfs node is root-only | installer's udev rule, or run as root |
+| `install.sh` exits **1** with `tmp: unbound variable` right after a successful install | an `EXIT` trap captured a `local` variable, which is out of scope by the time the trap runs (`set -u`) | keep trap-captured variables global (`FETCH_TMP`) |
+| a `set -e` script aborts on a line that is *only* `[[ cond ]] && cmd` **as that function's last statement** | the failed `&&` list becomes the function's return status | mid-function `[[ ]] && cmd` / `(( )) && return` are safe (verified), only *tails* are dangerous — write tails as `if` |
 
 ---
 

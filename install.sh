@@ -86,22 +86,38 @@ fi
 
 # ----------------------------------------------------------- locate sources --
 SRC_DIR=""
+# Scratch dir used when this script is run without its files (curl | bash).
+# It must NOT be `local` to fetch_sources(): the EXIT trap below runs after
+# the function has returned, and `local` + `set -u` then aborts the script
+# with "tmp: unbound variable" - i.e. a successful install reporting failure.
+FETCH_TMP=""
+
+cleanup_fetch_tmp() {
+  if [[ -n "${FETCH_TMP:-}" ]]; then
+    rm -rf "${FETCH_TMP:-}"
+    FETCH_TMP=""
+  fi
+  return 0
+}
+
 if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]:-}" ]]; then
   SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 fi
 
 fetch_sources() {
   command -v curl >/dev/null 2>&1 || die "curl is needed to download the sources"
-  local tmp
-  tmp="$(mktemp -d)"
-  trap 'rm -rf "$tmp"' EXIT
+  FETCH_TMP="$(mktemp -d)"
+  trap cleanup_fetch_tmp EXIT
   log "No local copy of the sources found - downloading from $RAW_BASE"
   local f
   for f in "${SOURCE_FILES[@]}"; do
-    mkdir -p "$tmp/$(dirname "$f")"
-    run curl -fsSL "$RAW_BASE/$f" -o "$tmp/$f" || die "download failed: $f"
+    mkdir -p "$FETCH_TMP/$(dirname "$f")"
+    run curl -fsSL "$RAW_BASE/$f" -o "$FETCH_TMP/$f" || die "download failed: $f"
   done
-  SRC_DIR="$tmp"
+  if (( DRY_RUN == 0 )) && [[ ! -f "$FETCH_TMP/cp210x_usb.py" ]]; then
+    die "downloaded sources are incomplete - check your network/proxy"
+  fi
+  SRC_DIR="$FETCH_TMP"
 }
 
 if [[ -z "$SRC_DIR" || ! -f "$SRC_DIR/cp210x_usb.py" || ! -f "$SRC_DIR/esp" ]]; then
