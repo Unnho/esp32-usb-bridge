@@ -86,12 +86,19 @@ esp read_flash 0x1000 4096 dump.bin
 esp --baud 460800 write_flash 0x1000 firmware.bin
 esp erase_flash
 esp image_info build/firmware.bin
-esp monitor         # (not an esptool command - use esp-monitor, below)
 
 esp-monitor         # live serial console @ 115200
 esp-monitor --reset # reset first so you capture the boot log
 esp-monitor -b 748800
 ```
+
+`esp` accepts every stock esptool command — `chip_id`, `flash_id`, `read_mac`,
+`read_flash`, `write_flash`, `verify_flash`, `erase_flash`, `erase_region`,
+`merge_bin`, `image_info`, `dump_mem`, `read_mem`, `write_mem`,
+`read_flash_status`, `write_flash_status`, `get_security_info`, `run`,
+`make_image`, `version` — plus this project's own `esp bridge-info`.
+**There is no `esp monitor`**: the console is the separate `esp-monitor`
+command (esptool has no built-in monitor in v4.7).
 
 `esptool.py` is aliased to the same wrapper, so muscle memory works too:
 
