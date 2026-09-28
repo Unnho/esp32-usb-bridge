@@ -245,6 +245,25 @@ Note `selftest.py` **resets the board**; `esp-monitor --reset` does too.
 
 * Read-only commands are fine to run freely against a connected board.
 * Anything that writes or erases flash/RAM: **ask the user first**.
+* **The flash-write path has been verified** (do not redo it blindly): a 4 KB
+  test image (ASCII text + `0x00`-`0xFF` pattern + `0xFF`/`0x00` runs + footer
+  byte) was written to scratch `0x000000` — a fully erased region that belongs
+  to no partition — and confirmed four ways: esptool's post-write MD5, a
+  separate `verify_flash`, a `read_flash` whose SHA-256 matched the source
+  byte-for-byte, and a final `erase_region` restore that read back 100% `0xFF`,
+  identical to the pre-test copy. The bootloader at `0x1000` was re-validated
+  afterwards with `image_info` (`Checksum … (valid)`, `Validation Hash …
+  (valid)`).
+* **Write targets:** never write to `nvs`, `otadata`, `app0`, `spiffs`,
+  `coredump`, or the partition table at `0x8000` (it is *not* in the "free
+  gaps" list, because the table does not contain an entry for itself).
+  `app1` currently holds an image — it is not free either. `0x000000..0x1000`
+  is the only verified-safe scratch area on this board.
+* **Quirk:** `write_flash --no-compress` printed `Wrote 16384 bytes at
+  0x00000000` for a 4096-byte file (16 KB write-block accounting). Verified
+  afterwards that only `0x000000..0x0fff` was actually erased/programmed —
+  the bootloader's checksum and SHA-256 stayed valid. Do not treat that line
+  as evidence of a 16 KB write.
 * `selftest.py` and `esp-monitor --reset` reset the chip (it reboots into the
   app afterwards via esptool's `--after hard_reset`) — acceptable, but say so.
 * There is no hardware-in-the-loop CI. Treat `selftest.py` as the test suite
