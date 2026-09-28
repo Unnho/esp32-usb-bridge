@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Local firmware / flash dumps - never commit these
+*.bin
+*.elf
+*.map
+flash_dump*.bin
+dump.bin
+
+# Editor / OS noise
+.DS_Store
+*.swp
+*~

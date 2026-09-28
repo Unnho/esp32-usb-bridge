@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+"""esp - run esptool against the ESP32's CP2102 bridge over raw USB.
+
+The kernel here was built without CONFIG_USB_SERIAL_CP210X and has no module
+tree, so no /dev/ttyUSB* node exists for the board. This wrapper injects the
+userspace CP2102 driver (see /opt/esp-bridge/cp210x_usb.py) into pyserial and
+into esptool's reset logic, then runs stock esptool unmodified.
+
+Usage:
+    esp chip_id
+    esp flash_id
+    esp read_mac
+    esp --baud 460800 write_flash 0x0 firmware.bin
+    esp bridge-info        # show the CP2102's own identity
+    esp-monitor            # serial console (separate command)
+
+Every normal esptool command works: 'esp <command> [args]', with the port
+injected automatically. Stock '/usr/bin/esptool' will NOT find the board.
+"""
+
+import os
+import sys
+
+# The script's own directory is sys.path[0], and we ship an `esptool.py` shim
+# next to this file. Drop that directory before anything imports `esptool`,
+# otherwise the shim shadows the real esptool package.
+_script_dir = os.path.dirname(os.path.abspath(__file__ if "__file__" in globals() else sys.argv[0]))
+sys.path = [
+    p
+    for p in sys.path
+    if os.path.abspath(p or os.getcwd()) != _script_dir
+]
+
+sys.path.insert(0, "/opt/esp-bridge")
+
+try:
+    import serial  # noqa: E402
+    from cp210x_usb import CP210xSerial  # noqa: E402
+except ImportError as exc:
+    sys.stderr.write(
+        "esp: missing dependency (%s)\n"
+        "     Fix it with:  sudo ./install.sh   (from the repo, or:\n"
+        "     curl -fsSL https://raw.githubusercontent.com/Unnho/"
+        "esp32-usb-bridge/main/install.sh | sudo bash)\n" % exc
+    )
+    raise SystemExit(1)
+
+# Virtual port name handed to esptool. It only needs to look like a real
+# device path (esptool special-cases names starting with "/dev/").
+PORT_NAME = "/dev/esp32"
+PORT_URLS = (PORT_NAME, "cp2102://", "cp2102://auto")
+
+# --------------------------------------------------------------------------
+# 1. Make pyserial hand out our USB-backed port instead of a tty device.
+# --------------------------------------------------------------------------
+_real_serial_for_url = serial.serial_for_url
+
+
+def _serial_for_url(url, *args, **kwargs):
+    if str(url) in PORT_URLS:
+        kwargs.pop("exclusive", None)  # only meaningful for real ttys
+        return CP210xSerial(port=PORT_NAME, **kwargs)
+    return _real_serial_for_url(url, *args, **kwargs)
+
+
+serial.serial_for_url = _serial_for_url
+
+# --------------------------------------------------------------------------
+# 2. esptool's UnixTightReset drives both lines with fcntl/ioctl(TIOCMSET)
+#    on a file descriptor. We have no fd, so route it through our combined
+#    single-request setter instead (same semantics, one USB control transfer).
+# --------------------------------------------------------------------------
+import struct  # noqa: E402
+
+try:
+    import esptool.reset as _reset  # noqa: E402
+    from esptool.loader import ESPLoader  # noqa: E402
+except ImportError as exc:
+    sys.stderr.write(
+        "esp: could not import the esptool package (%s)\n"
+        "     Fix it with:  sudo ./install.sh\n" % exc
+    )
+    raise SystemExit(1)
+
+
+def _setDTRandRTS(self, dtr=False, rts=False):
+    setter = getattr(self.port, "setDTRandRTS", None)
+    if setter is not None:
+        setter(dtr, rts)
+        return
+    # Fall back to the original fd-based implementation for real ttys.
+    status = struct.unpack(
+        "I", _fcntl_ioctl(self.port.fileno(), _TIOCMGET, struct.pack("I", 0))
+    )[0]
+    status = (status | _TIOCM_DTR) if dtr else (status & ~_TIOCM_DTR)
+    status = (status | _TIOCM_RTS) if rts else (status & ~_TIOCM_RTS)
+    _fcntl_ioctl(self.port.fileno(), _TIOCMSET, struct.pack("I", status))
+
+
+# Only pull in the ioctl bits if we are on a platform that has them; the
+# patched method above short-circuits for our port so they are never used.
+if _reset.os.name != "nt":
+    import fcntl as _fcntl  # noqa: E402
+
+    _fcntl_ioctl = _fcntl.ioctl
+    _TIOCMGET = _reset.TIOCMGET
+    _TIOCMSET = _reset.TIOCMSET
+    _TIOCM_DTR = _reset.TIOCM_DTR
+    _TIOCM_RTS = _reset.TIOCM_RTS
+else:  # pragma: no cover - Linux only environment
+    _fcntl_ioctl = None
+    _TIOCMGET = _TIOCMSET = _TIOCM_DTR = _TIOCM_RTS = 0
+
+_reset.ResetStrategy._setDTRandRTS = _setDTRandRTS
+
+# --------------------------------------------------------------------------
+# 3. Our port is not a kernel-registered USB-serial device, so pyserial's
+#    list_ports cannot supply a PID. esptool otherwise prints a confusing
+#    "Failed to get PID ..." warning on every run; there is no PID to find.
+# --------------------------------------------------------------------------
+
+
+def _get_pid_quiet(self):
+    return None
+
+
+ESPLoader._get_pid = _get_pid_quiet
+
+
+def _bridge_info():
+    from cp210x_usb import CP210xError
+
+    try:
+        port = CP210xSerial(baudrate=115200, timeout=0.2)
+    except CP210xError as exc:
+        sys.stderr.write("esp: %s\n" % exc)
+        return 1
+    try:
+        print("CP2102 bridge (userspace driver, no kernel tty):")
+        print(port.describe())
+    finally:
+        port.close()
+    return 0
+
+
+def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+
+    if argv and argv[0] in ("bridge-info", "--bridge-info"):
+        return _bridge_info()
+
+    has_port = any(a == "--port" or a.startswith("--port=") for a in argv)
+    if not has_port:
+        argv = ["--port", PORT_NAME] + argv
+
+    sys.argv = [sys.argv[0]] + argv
+
+    import esptool
+
+    # esptool._main() handles its own FatalError/SerialException. The one
+    # thing it cannot know about is our USB driver failing to open, so turn
+    # that into a clean one-line error instead of a traceback.
+    from cp210x_usb import CP210xError
+
+    try:
+        esptool._main()
+    except CP210xError as exc:
+        sys.stderr.write("esp: %s\n" % exc)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
