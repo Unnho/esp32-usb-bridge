@@ -26,15 +26,22 @@ sys.path.insert(0, "/opt/esp-bridge")
 from cp210x_usb import CP210xSerial, CP210xError  # noqa: E402
 
 
-def classic_reset(port):
-    """Pulse EN/IO0 exactly like esptool's ClassicReset strategy."""
-    port.setDTR(False)
-    port.setRTS(True)
+def hard_reset(port):
+    """Pulse EN only, keeping IO0 high, so the chip reboots into the flash app.
+
+    This is esptool's HardReset strategy: DTR stays deasserted (IO0 high) and
+    only RTS is pulsed (EN low for 100 ms). The app then prints its own boot
+    log, which is what a console session wants to see.
+
+    The old implementation here was esptool's ClassicReset - the *download
+    mode* sequence - which leaves the chip parked at "waiting for download"
+    and silently dead consoles.
+    """
+    port.setDTR(False)   # IO0 high: boot from flash
+    port.setRTS(True)    # EN low
     time.sleep(0.1)
-    port.setDTR(True)
-    port.setRTS(False)
+    port.setRTS(False)   # EN high: release into the app
     time.sleep(0.05)
-    port.setDTR(False)
 
 
 def main(argv=None):
@@ -64,8 +71,8 @@ def main(argv=None):
         return 1
 
     if args.reset:
-        classic_reset(port)
-        time.sleep(0.2)
+        hard_reset(port)
+        time.sleep(0.3)
 
     saved_attrs = None
     if sys.stdin.isatty() and not args.raw:

@@ -421,7 +421,18 @@ class CP210xSerial:
         try:
             written = self._ep_out.write(data, timeout=timeout_ms)
         except usb.core.USBError as exc:
-            raise CP210xError("USB write failed: %s" % exc)
+            # Right after an EN-toggle the board can brown out or re-enumerate
+            # for a moment, which shows up as a one-off EIO on the bulk OUT.
+            # One retry rides over it instead of failing the whole command.
+            time.sleep(0.1)
+            try:
+                written = self._ep_out.write(data, timeout=timeout_ms)
+            except usb.core.USBError as exc2:
+                hint = ""
+                if exc2.errno in (5, 19):  # EIO / ENODEV
+                    hint = (" (USB link lost - the board may have re-enumerated"
+                            "; unplug/replug, then re-run)")
+                raise CP210xError("USB write failed: %s%s" % (exc2, hint))
         return written
 
     def flush(self):

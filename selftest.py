@@ -9,7 +9,7 @@ import sys
 import time
 
 sys.path.insert(0, "/opt/esp-bridge")
-from cp210x_usb import CP210xSerial  # noqa: E402
+from cp210x_usb import CP210xError, CP210xSerial  # noqa: E402
 
 
 def main():
@@ -72,4 +72,10 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # A USB hiccup or a missing board should read as a test failure, not a
+    # Python traceback - the exit code is what scripts check.
+    try:
+        sys.exit(main())
+    except CP210xError as exc:
+        sys.stderr.write("selftest FAILED: %s\n" % exc)
+        sys.exit(1)

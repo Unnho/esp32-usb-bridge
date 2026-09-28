@@ -236,6 +236,8 @@ Note `selftest.py` **resets the board**; `esp-monitor --reset` does too.
 | `Permission denied` on `/dev/bus/usb/...` | usbfs node is root-only | installer's udev rule, or run as root |
 | `install.sh` exits **1** with `tmp: unbound variable` right after a successful install | an `EXIT` trap captured a `local` variable, which is out of scope by the time the trap runs (`set -u`) | keep trap-captured variables global (`FETCH_TMP`) |
 | a `set -e` script aborts on a line that is *only* `[[ cond ]] && cmd` **as that function's last statement** | the failed `&&` list becomes the function's return status | mid-function `[[ ]] && cmd` / `(( )) && return` are safe (verified), only *tails* are dangerous — write tails as `if` |
+| board loops `rst:0xc (SW_CPU_RESET)` + `Brownout detector was triggered` while `esp …` all succeed | hardware: 3.3 V rail sagging (Wi-Fi TX current), and the same spike makes the host drop the whole USB bus (`usb usb1: USB disconnect`) | not a software bug — better cable / powered hub / external 5V. See README → Troubleshooting |
+| `esp-monitor --reset` put the chip in download mode instead of booting the app | it used esptool's `ClassicReset` (the *download* sequence) while documenting a "hard reset" | `hard_reset()` pulses EN only, IO0 kept high |
 
 ---
 

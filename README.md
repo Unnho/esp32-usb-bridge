@@ -198,6 +198,26 @@ confirm the data path, then investigate the reset wiring.
 **`esptool: error: argument operation: invalid choice: 'chip-id'`**
 Commands use underscores: `chip_id`, `flash_id`, `read_mac`, `read_flash`.
 
+**`Brownout detector was triggered`, over and over**
+The board's 3.3 V rail is sagging — this is a **power problem, not a software
+one**. The chip browns out (usually the moment its Wi-Fi starts
+transmitting), takes a `rst:0xc (SW_CPU_RESET)` and loops. You may also see
+the USB device vanish entirely: the current spike drags VBUS down and the
+host port's over-current protection drops the whole bus
+(`dmesg`: `usb usb1: USB disconnect`). Fixes, in order of likelihood:
+
+1. shorter/better USB cable (long or thin cables drop volts under load)
+2. a **powered** USB hub, or power the board from a wall supply / bench PSU
+   on the `5V`/`VIN` pin instead of the host port
+3. unplug anything else wired to the board (sensors, LEDs, shields) that
+   draws from `3V3`
+4. measure `3V3` with a multimeter — if it dips below ~2.5 V under load, the
+   onboard regulator or the board itself is faulty
+
+You can tell it is not this tooling: the chip is perfectly stable in download
+mode (the ROM never starts Wi-Fi), so every `esp …` command succeeds while
+the same board reset-loops when running its app.
+
 **Second run says `port is busy` after a crashed session**
 Nothing is usually left over, but if it persists: `pkill -f esp-monitor`,
 re-plug the board.
